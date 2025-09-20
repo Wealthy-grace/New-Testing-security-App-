@@ -1,0 +1,90 @@
+#version: '3.8'
+#
+#services:
+#  db:
+#    image: mysql:8.0
+#    container_name: blog-database
+#    environment:
+#      MYSQL_ROOT_PASSWORD: Server123@
+#      MYSQL_DATABASE: blog
+#    ports:
+#      - "3307:3306"
+#    healthcheck:
+#      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pServer123@"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#    networks:
+#      - backend
+#
+#  spring-app:
+#    build: .
+#    container_name: blog-backend
+#    ports:
+#      - "8080:8080"
+#    depends_on:
+#      db:
+#        condition: service_healthy
+#    environment:
+#      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/blog?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+#      SPRING_DATASOURCE_USERNAME: root
+#      SPRING_DATASOURCE_PASSWORD: Server123@
+#      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+#      SERVER_ADDRESS: 0.0.0.0
+#    networks:
+#      - backend
+#
+#networks:
+#  backend:
+
+
+#testing to check
+
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: blog-database
+    environment:
+      MYSQL_ROOT_PASSWORD: Server123@
+      MYSQL_DATABASE: blog
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "3307:3306"
+    volumes:
+      - blog_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pServer123@" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - backend
+    restart: unless-stopped
+
+  spring-app:
+    build: .
+    container_name: blog-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/blog?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: Server123@
+    networks:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  blog_mysql_data:
+
+networks:
+  backend:
+    driver: bridge

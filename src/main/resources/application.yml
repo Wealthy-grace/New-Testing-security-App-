@@ -1,0 +1,49 @@
+# ----------------------------------------
+# Local Development Configuration
+# ----------------------------------------
+
+spring:
+  datasource:
+    # Local MySQL connection (for MySQL Workbench compatibility)
+    url: jdbc:mysql://localhost:3307/blog?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+
+    # Development-friendly pool settings
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 20000
+
+  jpa:
+    hibernate:
+      ddl-auto: update  # Allow schema updates in development
+    show-sql: true  # Show SQL for debugging
+    properties:
+      hibernate:
+        format_sql: true
+        show_sql: true
+        use_sql_comments: true
+
+  # Development Flyway settings
+  flyway:
+    enabled: true
+    clean-disabled: false  # Allow clean in development
+
+  # Disable Docker Compose for local development
+  docker:
+    compose:
+      enabled: false
+
+server:
+  port: 8080
+
+# Verbose logging for development
+logging:
+  level:
+    root: INFO
+    com.example: DEBUG
+    org.springframework: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.flywaydb: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
