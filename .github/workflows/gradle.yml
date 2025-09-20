@@ -14,8 +14,8 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: wealthy-grace/social-preview-app
-  JAVA_VERSION: '17'
-  GRADLE_VERSION: '8.5'
+  JAVA_VERSION: 17
+  GRADLE_VERSION: 8.5
 
 jobs:
   # -----------------------------
@@ -206,9 +206,14 @@ jobs:
     steps:
       - name: Deploy to Staging
         run: |
-          echo "🚀 Deploying staging..."
-          # Example: SSH to staging server and run Docker
-          # ssh user@staging "docker pull ${{ needs.build-docker.outputs.image-tag }} && docker run -d -p 8080:8080 ${{ needs.build-docker.outputs.image-tag }}"
+          IMAGE_TAG=${{ steps.build-docker.outputs.image-tag }}
+          echo "🚀 Deploying staging image: $IMAGE_TAG"
+          docker pull $IMAGE_TAG
+          docker stop social-preview-app-staging || true
+          docker rm social-preview-app-staging || true
+          docker run -d --name social-preview-app-staging -p 8081:8080 \
+            -e SPRING_PROFILES_ACTIVE=staging \
+            $IMAGE_TAG
 
   # -----------------------------
   # 5. Deploy Production
@@ -221,12 +226,17 @@ jobs:
     steps:
       - name: Deploy to Production
         run: |
-          echo "🚀 Deploying production..."
-          # Example: SSH to production server and run Docker
-          # ssh user@production "docker pull ${{ needs.build-docker.outputs.image-tag }} && docker run -d -p 80:8080 ${{ needs.build-docker.outputs.image-tag }}"
+          IMAGE_TAG=${{ steps.build-docker.outputs.image-tag }}
+          echo "🚀 Deploying production image: $IMAGE_TAG"
+          docker pull $IMAGE_TAG
+          docker stop social-preview-app || true
+          docker rm social-preview-app || true
+          docker run -d --name social-preview-app -p 80:8080 \
+            -e SPRING_PROFILES_ACTIVE=production \
+            $IMAGE_TAG
 
   # -----------------------------
-  # 6. Cleanup Job
+  # 6. Cleanup
   # -----------------------------
   cleanup:
     runs-on: ubuntu-latest
