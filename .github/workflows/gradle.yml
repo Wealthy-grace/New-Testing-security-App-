@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: wealthy-grace/social-preview-app
+  IMAGE_NAME: ${{ github.repository_owner }}/social-preview-app
   JAVA_VERSION: '17'
   GRADLE_VERSION: '8.5'
 
@@ -17,7 +17,7 @@ jobs:
   # Job 1: Build and Test
   build-and-test:
     runs-on: ubuntu-latest
-
+    
     services:
       mysql:
         image: mysql:8.0
@@ -35,210 +35,220 @@ jobs:
           --health-start-period=30s
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-version: ${{ env.GRADLE_VERSION }}
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: ${{ env.GRADLE_VERSION }}
 
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+    - name: Cache Gradle packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
 
-      - name: Wait for MySQL to be ready
-        run: |
-          echo "Waiting for MySQL to be ready..."
-          for i in {1..30}; do
-            if mysqladmin ping -h 127.0.0.1 -P 3306 -u root -pServer123@ --silent; then
-              echo "MySQL is ready!"
-              break
-            fi
-            echo "Waiting for MySQL... ($i/30)"
-            sleep 2
-          done
-
-      - name: Create test database
-        run: |
-          mysql -h 127.0.0.1 -P 3306 -u root -pServer123@ -e "CREATE DATABASE IF NOT EXISTS social_preview_test;"
-
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
-
-      - name: Verify Spring Boot Test Dependencies
-        run: |
-          echo "Checking for spring-boot-starter-test dependency..."
-          if ./gradlew dependencies --configuration testImplementation | grep -q "spring-boot-starter-test"; then
-            echo "✅ spring-boot-starter-test found"
-          else
-            echo "❌ spring-boot-starter-test NOT found - this will cause test compilation to fail"
-            echo "Please add this to your build.gradle:"
-            echo "testImplementation 'org.springframework.boot:spring-boot-starter-test'"
+    - name: Wait for MySQL to be ready
+      run: |
+        echo "Waiting for MySQL to be ready..."
+        for i in {1..30}; do
+          if mysqladmin ping -h 127.0.0.1 -P 3306 -u root -pServer123@ --silent; then
+            echo "MySQL is ready!"
+            break
           fi
+          echo "Waiting for MySQL... ($i/30)"
+          sleep 2
+        done
 
-      - name: Check Gradle dependencies
-        run: ./gradlew dependencies --configuration testImplementation
+    - name: Create test database
+      run: |
+        mysql -h 127.0.0.1 -P 3306 -u root -pServer123@ -e "CREATE DATABASE IF NOT EXISTS social_preview_test;"
 
-      - name: Compile test classes
-        run: ./gradlew compileTestJava --no-daemon
-        env:
-          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/social_preview_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-          SPRING_DATASOURCE_USERNAME: root
-          SPRING_DATASOURCE_PASSWORD: Server123@
-          SPRING_PROFILES_ACTIVE: test
+    - name: Make gradlew executable
+      run: chmod +x ./gradlew
 
-      - name: Run tests
-        run: ./gradlew test --no-daemon --continue
-        env:
-          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/social_preview_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-          SPRING_DATASOURCE_USERNAME: root
-          SPRING_DATASOURCE_PASSWORD: Server123@
-          SPRING_PROFILES_ACTIVE: test
+    - name: Verify Spring Boot Test Dependencies
+      run: |
+        echo "Checking for spring-boot-starter-test dependency..."
+        if ./gradlew dependencies --configuration testImplementation | grep -q "spring-boot-starter-test"; then
+          echo "✅ spring-boot-starter-test found"
+        else
+          echo "❌ spring-boot-starter-test NOT found - this will cause test compilation to fail"
+          echo "Please add this to your build.gradle:"
+          echo "testImplementation 'org.springframework.boot:spring-boot-starter-test'"
+        fi
 
-      - name: Build application (skip tests if they fail)
-        run: ./gradlew clean build -x test --no-daemon
+    - name: Check Gradle dependencies
+      run: ./gradlew dependencies --configuration testImplementation
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: jar-artifacts
-          path: build/libs/*.jar
-          retention-days: 1
+    - name: Compile test classes
+      run: ./gradlew compileTestJava --no-daemon
+      env:
+        SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/social_preview_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+        SPRING_DATASOURCE_USERNAME: root
+        SPRING_DATASOURCE_PASSWORD: Server123@
+        SPRING_PROFILES_ACTIVE: test
 
-      - name: Upload test reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-reports
-          path: build/reports/tests/
-          retention-days: 7
+    - name: Run tests
+      run: ./gradlew test --no-daemon --continue
+      env:
+        SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/social_preview_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+        SPRING_DATASOURCE_USERNAME: root
+        SPRING_DATASOURCE_PASSWORD: Server123@
+        SPRING_PROFILES_ACTIVE: test
+
+    - name: Build application (skip tests if they fail)
+      run: ./gradlew clean build -x test --no-daemon
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: jar-artifacts
+        path: build/libs/*.jar
+        retention-days: 1
+
+    - name: Upload test reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-reports
+        path: build/reports/tests/
+        retention-days: 7
 
   # Job 2: Security Scan
   security-scan:
     runs-on: ubuntu-latest
     needs: build-and-test
     if: github.event_name == 'push'
-
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
 
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+    - name: Cache Gradle packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
-      - name: Run dependency vulnerability scan
-        run: ./gradlew dependencyCheckAnalyze --no-daemon || true
+    - name: Run dependency vulnerability scan
+      run: ./gradlew dependencyCheckAnalyze --no-daemon || true
 
-      - name: Upload security scan results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: security-reports
-          path: build/reports/
-          retention-days: 7
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-reports
+        path: build/reports/
+        retention-days: 7
 
   # Job 3: Build and Push Docker Image
   build-docker:
     runs-on: ubuntu-latest
     needs: [build-and-test, security-scan]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
+    
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
       image-tag: ${{ steps.meta.outputs.tags }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: jar-artifacts
-          path: build/libs/
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: jar-artifacts
+        path: build/libs/
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-      - name: Validate Docker image name
-        run: |
-          echo "Repository: ${{ github.repository }}"
-          echo "Image name: ${{ env.IMAGE_NAME }}"
-          echo "Registry: ${{ env.REGISTRY }}"
-          
-          # Validate the image name format
-          if [[ "${{ env.IMAGE_NAME }}" =~ ^[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$ ]]; then
-            echo "✅ Valid Docker image name format"
-          else
-            echo "❌ Invalid Docker image name format"
-            exit 1
-          fi
+    - name: Validate Docker image name
+      run: |
+        echo "Repository: ${{ github.repository }}"
+        echo "Image name: ${{ env.IMAGE_NAME }}"
+        echo "Registry: ${{ env.REGISTRY }}"
+        
+        # Validate the image name format
+        if [[ "${{ env.IMAGE_NAME }}" =~ ^[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$ ]]; then
+          echo "✅ Valid Docker image name format"
+        else
+          echo "❌ Invalid Docker image name format"
+          exit 1
+        fi
 
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix=commit-
-            type=raw,value=latest,enable={{is_default_branch}}
-          labels: |
-            org.opencontainers.image.title=Social Preview App
-            org.opencontainers.image.description=Spring Boot Social Preview Application
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.url=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ github.ref_name }}
-          flavor: |
-            latest=auto
+    - name: Check GitHub token permissions
+      run: |
+        echo "Repository: ${{ github.repository }}"
+        echo "Repository Owner: ${{ github.repository_owner }}"
+        echo "Actor: ${{ github.actor }}"
+        echo "Image will be: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+        
+        # Check if we can authenticate
+        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
 
-      - name: Build and push Docker image
-        id: build
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix=commit-
+          type=raw,value=latest,enable={{is_default_branch}}
+        labels: |
+          org.opencontainers.image.title=Social Preview App
+          org.opencontainers.image.description=Spring Boot Social Preview Application
+          org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          org.opencontainers.image.url=https://github.com/${{ github.repository }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.version=${{ github.ref_name }}
+        flavor: |
+          latest=auto
+
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
 
   # Job 4: Deploy to Staging
   deploy-staging:
@@ -246,45 +256,45 @@ jobs:
     needs: build-docker
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: staging
-
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Deploy to staging
-        run: |
-          echo "Deploying to staging environment..."
-          # Replace this with your actual deployment commands
-          # Examples:
-          # - kubectl apply -f k8s/staging/
-          # - docker-compose -f docker-compose.staging.yml up -d
-          # - AWS ECS task definition update
-          # - Azure Container Apps deployment
-          
-          # For demonstration, we'll use docker-compose
-          export IMAGE_TAG="${{ needs.build-docker.outputs.image-tag }}"
-          echo "Deploying image: $IMAGE_TAG"
-          
-          # Create staging docker-compose override
-          cat > docker-compose.staging.yml << EOF
-          version: '3.8'
-          services:
-            spring-app:
-              image: $IMAGE_TAG
-              environment:
-                SPRING_PROFILES_ACTIVE: staging
-                SPRING_DATASOURCE_URL: \${STAGING_DATABASE_URL}
-                SPRING_DATASOURCE_USERNAME: \${STAGING_DB_USERNAME}
-                SPRING_DATASOURCE_PASSWORD: \${STAGING_DB_PASSWORD}
-          EOF
-          
-          echo "Staging deployment configuration created"
+    - name: Deploy to staging
+      run: |
+        echo "Deploying to staging environment..."
+        # Replace this with your actual deployment commands
+        # Examples:
+        # - kubectl apply -f k8s/staging/
+        # - docker-compose -f docker-compose.staging.yml up -d
+        # - AWS ECS task definition update
+        # - Azure Container Apps deployment
+        
+        # For demonstration, we'll use docker-compose
+        export IMAGE_TAG="${{ needs.build-docker.outputs.image-tag }}"
+        echo "Deploying image: $IMAGE_TAG"
+        
+        # Create staging docker-compose override
+        cat > docker-compose.staging.yml << EOF
+        version: '3.8'
+        services:
+          spring-app:
+            image: $IMAGE_TAG
+            environment:
+              SPRING_PROFILES_ACTIVE: staging
+              SPRING_DATASOURCE_URL: \${STAGING_DATABASE_URL}
+              SPRING_DATASOURCE_USERNAME: \${STAGING_DB_USERNAME}
+              SPRING_DATASOURCE_PASSWORD: \${STAGING_DB_PASSWORD}
+        EOF
+        
+        echo "Staging deployment configuration created"
 
-      - name: Health check staging
-        run: |
-          echo "Performing health check on staging..."
-          # Add your health check logic here
-          # curl -f http://staging.yourdomain.com/actuator/health || exit 1
+    - name: Health check staging
+      run: |
+        echo "Performing health check on staging..."
+        # Add your health check logic here
+        # curl -f http://staging.yourdomain.com/actuator/health || exit 1
 
   # Job 5: Deploy to Production
   deploy-production:
@@ -292,86 +302,86 @@ jobs:
     needs: [build-docker, deploy-staging]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
-
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Deploy to production
-        run: |
-          echo "Deploying to production environment..."
-          export IMAGE_TAG="${{ needs.build-docker.outputs.image-tag }}"
-          echo "Deploying image: $IMAGE_TAG"
-          
-          # Create production docker-compose override
-          cat > docker-compose.production.yml << EOF
-          version: '3.8'
-          services:
-            spring-app:
-              image: $IMAGE_TAG
-              environment:
-                SPRING_PROFILES_ACTIVE: production
-                SPRING_DATASOURCE_URL: \${PROD_DATABASE_URL}
-                SPRING_DATASOURCE_USERNAME: \${PROD_DB_USERNAME}
-                SPRING_DATASOURCE_PASSWORD: \${PROD_DB_PASSWORD}
-                SPRING_APP_JWTSECRET: \${PROD_JWT_SECRET}
-              deploy:
-                replicas: 3
-                resources:
-                  limits:
-                    cpus: '1.0'
-                    memory: 1G
-                  reservations:
-                    cpus: '0.5'
-                    memory: 512M
-          EOF
-          
-          echo "Production deployment configuration created"
+    - name: Deploy to production
+      run: |
+        echo "Deploying to production environment..."
+        export IMAGE_TAG="${{ needs.build-docker.outputs.image-tag }}"
+        echo "Deploying image: $IMAGE_TAG"
+        
+        # Create production docker-compose override
+        cat > docker-compose.production.yml << EOF
+        version: '3.8'
+        services:
+          spring-app:
+            image: $IMAGE_TAG
+            environment:
+              SPRING_PROFILES_ACTIVE: production
+              SPRING_DATASOURCE_URL: \${PROD_DATABASE_URL}
+              SPRING_DATASOURCE_USERNAME: \${PROD_DB_USERNAME}
+              SPRING_DATASOURCE_PASSWORD: \${PROD_DB_PASSWORD}
+              SPRING_APP_JWTSECRET: \${PROD_JWT_SECRET}
+            deploy:
+              replicas: 3
+              resources:
+                limits:
+                  cpus: '1.0'
+                  memory: 1G
+                reservations:
+                  cpus: '0.5'
+                  memory: 512M
+        EOF
+        
+        echo "Production deployment configuration created"
 
-      - name: Health check production
-        run: |
-          echo "Performing health check on production..."
-          # Add your health check logic here
-          # curl -f http://yourdomain.com/actuator/health || exit 1
+    - name: Health check production
+      run: |
+        echo "Performing health check on production..."
+        # Add your health check logic here
+        # curl -f http://yourdomain.com/actuator/health || exit 1
 
-      - name: Notify deployment success
-        run: |
-          echo "✅ Deployment to production successful!"
-          echo "🚀 Social Preview App v$(git rev-parse --short HEAD) is now live!"
+    - name: Notify deployment success
+      run: |
+        echo "✅ Deployment to production successful!"
+        echo "🚀 Social Preview App v$(git rev-parse --short HEAD) is now live!"
 
   # Job 6: Cleanup
   cleanup:
     runs-on: ubuntu-latest
     needs: [deploy-production]
     if: always()
-
+    
     steps:
-      - name: Clean up old artifacts
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const artifacts = await github.rest.actions.listArtifactsForRepo({
+    - name: Clean up old artifacts
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const artifacts = await github.rest.actions.listArtifactsForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+          
+          const oldArtifacts = artifacts.data.artifacts
+            .filter(artifact => {
+              const ageInDays = (Date.now() - new Date(artifact.created_at)) / (1000 * 60 * 60 * 24);
+              return ageInDays > 7;
+            });
+          
+          for (const artifact of oldArtifacts) {
+            await github.rest.actions.deleteArtifact({
               owner: context.repo.owner,
               repo: context.repo.repo,
+              artifact_id: artifact.id,
             });
-            
-            const oldArtifacts = artifacts.data.artifacts
-              .filter(artifact => {
-                const ageInDays = (Date.now() - new Date(artifact.created_at)) / (1000 * 60 * 60 * 24);
-                return ageInDays > 7;
-              });
-            
-            for (const artifact of oldArtifacts) {
-              await github.rest.actions.deleteArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                artifact_id: artifact.id,
-              });
-            }
-            
-            console.log(`Cleaned up ${oldArtifacts.length} old artifacts`);
+          }
+          
+          console.log(`Cleaned up ${oldArtifacts.length} old artifacts`);
 
-      - name: Clean up old Docker images
-        run: |
-          echo "Cleaning up old Docker images..."
-          # This would typically be handled by your container registry's retention policies
+    - name: Clean up old Docker images
+      run: |
+        echo "Cleaning up old Docker images..."
+        # This would typically be handled by your container registry's retention policies
