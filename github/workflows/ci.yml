@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: wealthy-grace/social-preview-app
   JAVA_VERSION: '17'
   GRADLE_VERSION: '8.5'
 
@@ -203,6 +203,15 @@ jobs:
             type=ref,event=pr
             type=sha,prefix=commit-
             type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=Social Preview App
+            org.opencontainers.image.description=Spring Boot Social Preview Application
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+          flavor: |
+            latest=auto
 
       - name: Build and push Docker image
         id: build
