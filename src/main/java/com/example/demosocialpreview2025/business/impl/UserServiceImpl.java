@@ -1,18 +1,21 @@
-package com.example.springsecuritydemo2025.business.impl;
+package com.example.demosocialpreview2025.business.impl;
 
-import com.example.springsecuritydemo2025.business.interfaces.UserService;
-import com.example.springsecuritydemo2025.domain.dto.UserDto;
-import com.example.springsecuritydemo2025.domain.request.SignUpRequest;
-import com.example.springsecuritydemo2025.persistence.entity.Role;
-import com.example.springsecuritydemo2025.persistence.entity.UserEntity;
-import com.example.springsecuritydemo2025.persistence.repository.UserRepo;
-import com.example.springsecuritydemo2025.security.jwt.JwtUtils;
+import com.example.demosocialpreview2025.business.interfaces.UserService;
+import com.example.demosocialpreview2025.domain.dto.UserDto;
+import com.example.demosocialpreview2025.domain.request.SignUpRequest;
+import com.example.demosocialpreview2025.domain.response.SignUpResponse;
+import com.example.demosocialpreview2025.mapper.UserMapperDto;
+import com.example.demosocialpreview2025.persistence.entity.Role;
+import com.example.demosocialpreview2025.persistence.entity.UserEntity;
+import com.example.demosocialpreview2025.persistence.repository.UserRepo;
+import com.example.demosocialpreview2025.security.jwt.JwtUtils;
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
+
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -24,32 +27,34 @@ public class UserServiceImpl implements UserService {
     private final JwtUtils jwtUtils;
     private final AuthenticationManager authenticationManager;
     private final UserRepo userRepository;
-    private final PasswordEncoder passwordEncoder;
+
+    private final UserMapperDto userMapperDto;
 
     @Override
-    public UserDto createUser(SignUpRequest signUpRequest) {
+    public SignUpResponse createUser(SignUpRequest signUpRequest) {
         if (userRepository.existsByUsername(signUpRequest.getUsername())) {
+
             throw new RuntimeException("Username is already taken.");
+
         }
 
-        UserEntity user = new UserEntity();
-        user.setUsername(signUpRequest.getUsername());
-        user.setPassword(passwordEncoder.encode(signUpRequest.getPassword()));
-        user.setEmail(signUpRequest.getEmail());
-        user.setFullName(signUpRequest.getFullName());
-        user.setEnabled(true);
+        if (userRepository.existsByEmail(signUpRequest.getEmail())) {   // Optional
+            throw new RuntimeException("Email is already taken.");
+        }
 
-        //user.setRole(signUpRequest.getRole());
-        user.setRole(Role.ROLE_USER);
-        user.setImage(signUpRequest.getImage());
+        if(userRepository.existsByFullName(signUpRequest.getFullName())) {
+            throw new RuntimeException("Full name is already taken.");
+        }
+
+        UserEntity user = userMapperDto.mapToEntity(signUpRequest);
 
         userRepository.save(user);
 
         // Optionally generate token on signup (if needed)
-        UserDto dto = UserDto.fromEntity(user);
-        // dto.setToken(jwtUtils.generateTokenFromUsername(user.getUsername())); // Optional
+        return SignUpResponse.builder()
+                .user(userMapperDto.mapToDTO(user))
+                .message("User created successfully").build();
 
-        return dto;
     }
 
     @Override

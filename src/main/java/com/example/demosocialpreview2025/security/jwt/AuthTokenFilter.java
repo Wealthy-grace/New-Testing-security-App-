@@ -1,4 +1,4 @@
-package com.example.springsecuritydemo2025.security.jwt;
+package com.example.demosocialpreview2025.security.jwt;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

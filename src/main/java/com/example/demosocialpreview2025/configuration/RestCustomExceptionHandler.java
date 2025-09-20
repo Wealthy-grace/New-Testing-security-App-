@@ -1,4 +1,4 @@
-package com.example.springsecuritydemo2025.configuration;
+package com.example.demosocialpreview2025.configuration;
 
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;

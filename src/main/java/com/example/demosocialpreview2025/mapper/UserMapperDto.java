@@ -1,16 +1,22 @@
-package com.example.springsecuritydemo2025.business.Converter;
+package com.example.demosocialpreview2025.mapper;
 
-import com.example.springsecuritydemo2025.domain.dto.BookDto;
-import com.example.springsecuritydemo2025.domain.dto.UserDto;
-import com.example.springsecuritydemo2025.persistence.entity.BookEntity;
-import com.example.springsecuritydemo2025.persistence.entity.Role;
-import com.example.springsecuritydemo2025.persistence.entity.UserEntity;
+
+import com.example.demosocialpreview2025.domain.dto.UserDto;
+import com.example.demosocialpreview2025.domain.request.SignUpRequest;
+import com.example.demosocialpreview2025.persistence.entity.Role;
+import com.example.demosocialpreview2025.persistence.entity.UserEntity;
+import com.example.demosocialpreview2025.security.jwt.JwtUtils;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+@RequiredArgsConstructor
 @Component
-public class UserConverDto {
+public  class UserMapperDto {
 
-    private UserDto mapToDTO(UserEntity entity) {
+    private final PasswordEncoder passwordEncoder;
+    private final JwtUtils jwtUtils;
+    public  UserDto mapToDTO(UserEntity entity) {
         return UserDto.builder()
                 .id(entity.getId())
                 .fullName(entity.getFullName())
@@ -18,19 +24,19 @@ public class UserConverDto {
                 .email(entity.getEmail())
                 .role(String.valueOf(entity.getRole()))
                 .image(entity.getImage())
+                .token(jwtUtils.generateTokenFromUsername(entity.getUsername()))
                 .build();
     }
 
 
-    private UserEntity mapToEntity(UserDto dto) {
+    public UserEntity mapToEntity(SignUpRequest request) {
         return UserEntity.builder()
-                .id(dto.getId())
-                .fullName(dto.getFullName())
-                .username(dto.getUsername())
-                .email(dto.getEmail())
-                .role(Role.ROLE_ADMIN)
-                //.role(Role.valueOf(dto.getRole()))
-                .image(dto.getImage())
+                .fullName(request.getFullName())
+                .username(request.getUsername())
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(Role.ROLE_USER)
+                .image(request.getImage())
                 .build();
     }
 }

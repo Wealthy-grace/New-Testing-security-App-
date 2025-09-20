@@ -5,7 +5,7 @@
 spring:
   datasource:
     # Local MySQL connection (for MySQL Workbench compatibility)
-    url: jdbc:mysql://localhost:3307/blog?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    url: jdbc:mysql://localhost:3307/social-preview?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
 
     # Development-friendly pool settings
     hikari:
@@ -34,7 +34,7 @@ spring:
       enabled: false
 
 server:
-  port: 8080
+  port: 8081
 
 # Verbose logging for development
 logging:

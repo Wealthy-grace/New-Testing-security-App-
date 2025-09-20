@@ -1,6 +1,7 @@
-package com.example.springsecuritydemo2025.persistence.repository;
+package com.example.demosocialpreview2025.persistence.repository;
 
-import com.example.springsecuritydemo2025.persistence.entity.UserEntity;
+
+import com.example.demosocialpreview2025.persistence.entity.UserEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

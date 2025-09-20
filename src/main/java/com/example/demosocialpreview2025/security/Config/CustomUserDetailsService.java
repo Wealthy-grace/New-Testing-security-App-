@@ -1,11 +1,14 @@
-package com.example.springsecuritydemo2025.security.Config;
+package com.example.demosocialpreview2025.security.Config;
 
 
-import com.example.springsecuritydemo2025.persistence.entity.UserEntity;
-import com.example.springsecuritydemo2025.persistence.repository.UserRepo;
+import com.example.demosocialpreview2025.persistence.entity.UserEntity;
+import com.example.demosocialpreview2025.persistence.repository.UserRepo;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.userdetails.*;
+
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

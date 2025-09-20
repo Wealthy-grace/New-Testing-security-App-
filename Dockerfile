@@ -1,5 +1,5 @@
 # Stage 1: Build using Gradle
-FROM gradle:8.5-jdk21 AS build
+FROM gradle:8.5-jdk17 AS build
 
 WORKDIR /home/gradle/src
 COPY --chown=gradle:gradle . .
@@ -7,7 +7,7 @@ COPY --chown=gradle:gradle . .
 RUN gradle --no-daemon clean build -x test
 
 # Stage 2: Copy and run JAR
-FROM openjdk:21-jdk-slim
+FROM openjdk:17-jdk-slim
 
 WORKDIR /app
 

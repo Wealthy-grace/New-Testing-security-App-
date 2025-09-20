@@ -1,10 +1,7 @@
-package com.example.springsecuritydemo2025.security.Config;
-
-import com.example.springsecuritydemo2025.security.jwt.AuthEntryPointJwt;
-import com.example.springsecuritydemo2025.security.jwt.AuthTokenFilter;
-import com.example.springsecuritydemo2025.security.jwt.JwtUtils;
-
-
+package com.example.demosocialpreview2025.security.Config;
+import com.example.demosocialpreview2025.security.jwt.AuthEntryPointJwt;
+import com.example.demosocialpreview2025.security.jwt.AuthTokenFilter;
+import com.example.demosocialpreview2025.security.jwt.JwtUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -55,10 +52,10 @@ public class SecurityConfiguration {
                         // Public endpoints
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/signup").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/books/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/linkedin/**").permitAll()
 
                         // Protected endpoints
-                        .requestMatchers("/api/books/**").hasRole("ADMIN")
+                        .requestMatchers("/api/linkedin/**").hasRole("ADMIN")
 
                         // All other endpoints require authentication
                         .anyRequest().authenticated()

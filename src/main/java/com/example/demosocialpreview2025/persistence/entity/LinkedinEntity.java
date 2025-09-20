@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Entity
 
 @Table(name = "media")
-public class Linkedin {
+public class LinkedinEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
