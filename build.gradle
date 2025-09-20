@@ -24,23 +24,88 @@ repositories {
 }
 
 dependencies {
+    // Spring Boot Starters
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    // Database
+    runtimeOnly 'com.mysql:mysql-connector-j'
+
+    // Flyway Migration
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-mysql'
-    compileOnly 'org.projectlombok:lombok'
-    runtimeOnly 'com.mysql:mysql-connector-j'
-    annotationProcessor 'org.projectlombok:lombok'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    testImplementation 'org.springframework.security:spring-security-test'
+
+    // JWT Dependencies
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Testing Dependencies - THE MISSING PIECE!
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // Additional test dependencies for better testing
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:mysql'
+    testImplementation 'com.h2database:h2' // For in-memory testing
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.testcontainers:testcontainers-bom:1.19.3"
+    }
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+
+    // Test configuration
+    systemProperties = [
+            'spring.profiles.active': 'test'
+    ]
+
+    // Test JVM options for modern Java
+    jvmArgs = [
+            '--add-opens=java.base/java.lang=ALL-UNNAMED',
+            '--add-opens=java.base/java.time=ALL-UNNAMED'
+    ]
+
+    // Test logging
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+        showStandardStreams = false
+    }
+
+    // Continue on failures to see all test results
+    ignoreFailures = false
+}
+
+// Additional task for verbose testing
+task testVerbose(type: Test) {
+    useJUnitPlatform()
+    testLogging {
+        events "started", "passed", "skipped", "failed", "standardOut", "standardError"
+        exceptionFormat "full"
+        showStandardStreams = true
+    }
+}
+
+// Build configuration
+jar {
+    archiveBaseName = 'demo-social-preview-2025'
+    archiveVersion = '1.0.0'
+    enabled = false
+}
+
+bootJar {
+    archiveBaseName = 'demo-social-preview-2025'
+    archiveVersion = '1.0.0'
 }

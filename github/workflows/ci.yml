@@ -80,15 +80,37 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Run tests
-        run: ./gradlew test --no-daemon
+      - name: Verify Spring Boot Test Dependencies
+        run: |
+          echo "Checking for spring-boot-starter-test dependency..."
+          if ./gradlew dependencies --configuration testImplementation | grep -q "spring-boot-starter-test"; then
+            echo "✅ spring-boot-starter-test found"
+          else
+            echo "❌ spring-boot-starter-test NOT found - this will cause test compilation to fail"
+            echo "Please add this to your build.gradle:"
+            echo "testImplementation 'org.springframework.boot:spring-boot-starter-test'"
+          fi
+
+      - name: Check Gradle dependencies
+        run: ./gradlew dependencies --configuration testImplementation
+
+      - name: Compile test classes
+        run: ./gradlew compileTestJava --no-daemon
         env:
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/social_preview_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
           SPRING_DATASOURCE_USERNAME: root
           SPRING_DATASOURCE_PASSWORD: Server123@
           SPRING_PROFILES_ACTIVE: test
 
-      - name: Build application
+      - name: Run tests
+        run: ./gradlew test --no-daemon --continue
+        env:
+          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/social_preview_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+          SPRING_DATASOURCE_USERNAME: root
+          SPRING_DATASOURCE_PASSWORD: Server123@
+          SPRING_PROFILES_ACTIVE: test
+
+      - name: Build application (skip tests if they fail)
         run: ./gradlew clean build -x test --no-daemon
 
       - name: Upload build artifacts
