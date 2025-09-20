@@ -1,33 +1,28 @@
-#testing to check
-
 version: '3.8'
 
 services:
   db:
     image: mysql:8.0
-    container_name: social-preview-database
+    container_name: social-preview-db-local
     environment:
       MYSQL_ROOT_PASSWORD: Server123@
       MYSQL_DATABASE: social-preview
       MYSQL_ROOT_HOST: '%'
     ports:
-      - "3308:3306"
+      - "3307:3306"  # Different port to avoid conflicts
     volumes:
-      - blog_mysql_data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
     healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pServer123@" ]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pServer123@"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
     command: --default-authentication-plugin=mysql_native_password
-    networks:
-      - backend
-    restart: unless-stopped
 
-  spring-app:
+  app:
     build: .
-    container_name: social-preview-backend
+    container_name: social-preview-app-local
     depends_on:
       db:
         condition: service_healthy
@@ -38,13 +33,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/social-preview?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: Server123@
-    networks:
-      - backend
     restart: unless-stopped
 
 volumes:
-  blog_mysql_data:
-
-networks:
-  backend:
-    driver: bridge
+  mysql_data:
