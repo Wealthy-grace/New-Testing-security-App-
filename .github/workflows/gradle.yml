@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
   packages: write
+  actions: read
 
 env:
   REGISTRY: ghcr.io
@@ -19,10 +20,11 @@ env:
 
 jobs:
   # -----------------------------
-  # 1. Build and Test
+  # 1. Build and Test (Optimized)
   # -----------------------------
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       mysql:
@@ -35,131 +37,176 @@ jobs:
           - 3306:3306
         options: >-
           --health-cmd="mysqladmin ping -h localhost -u root -pServer123@"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-          --health-start-period=30s
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=3
+          --health-start-period=10s
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1  # Shallow clone for speed
 
-      - uses: actions/setup-java@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: temurin
+          cache: gradle  # Built-in Gradle caching
 
-      - uses: gradle/gradle-build-action@v2
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-read-only: false
 
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
 
-      - name: Wait for MySQL
+      # Parallel database setup while Gradle resolves dependencies
+      - name: Setup database & compile in parallel
         run: |
-          for i in {1..30}; do
-            if mysqladmin ping -h 127.0.0.1 -P 3306 -u root -pServer123@ --silent; then
-              echo "✅ MySQL is ready!"
-              break
-            fi
-            echo "⏳ Waiting for MySQL... ($i/30)"
-            sleep 2
-          done
+          # Start database setup in background
+          (
+            echo "⏳ Setting up database..."
+            for i in {1..15}; do
+              if mysqladmin ping -h 127.0.0.1 -P 3306 -u root -pServer123@ --silent 2>/dev/null; then
+                mysql -h 127.0.0.1 -P 3306 -u root -pServer123@ \
+                  -e "CREATE DATABASE IF NOT EXISTS social_preview_test;" 2>/dev/null
+                echo "✅ Database ready!"
+                break
+              fi
+              sleep 1
+            done
+          ) &
+          
+          # Start compilation in foreground
+          echo "🔨 Compiling..."
+          ./gradlew compileJava compileTestJava --parallel --build-cache --configuration-cache --no-daemon
+          
+          # Wait for background database setup
+          wait
 
-      - name: Create test database
+      - name: Run tests with optimizations
         run: |
-          mysql -h 127.0.0.1 -P 3306 -u root -pServer123@ \
-            -e "CREATE DATABASE IF NOT EXISTS social_preview_test;"
-
-      - run: chmod +x ./gradlew
-        name: Make gradlew executable
-
-      - name: Compile test classes
-        run: ./gradlew compileTestJava --no-daemon
+          ./gradlew test \
+            --parallel \
+            --build-cache \
+            --configuration-cache \
+            --no-daemon \
+            --continue \
+            -Dorg.gradle.jvmargs="-Xmx2g -XX:+UseParallelGC" \
+            -Dspring.jpa.hibernate.ddl-auto=create-drop \
+            -Dspring.datasource.hikari.maximum-pool-size=5
         env:
           SPRING_PROFILES_ACTIVE: test
 
-      - name: Run tests
-        run: ./gradlew test --no-daemon --continue
-        env:
-          SPRING_PROFILES_ACTIVE: test
+      - name: Build JAR (optimized)
+        run: |
+          ./gradlew bootJar \
+            --parallel \
+            --build-cache \
+            --configuration-cache \
+            --no-daemon \
+            -x test \
+            -Dorg.gradle.jvmargs="-Xmx2g -XX:+UseParallelGC"
 
-      - name: Build application (skip tests)
-        run: ./gradlew clean build -x test --no-daemon
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload JAR artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: jar-artifacts
           path: build/libs/*.jar
           retention-days: 1
+          compression-level: 6  # Faster compression
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-reports
           path: build/reports/tests/
-          retention-days: 7
+          retention-days: 3  # Reduced retention
 
   # -----------------------------
-  # 2. Security Scan
+  # 2. Parallel Security Scan
   # -----------------------------
   security-scan:
     runs-on: ubuntu-latest
     needs: build-and-test
     if: github.event_name == 'push'
+    timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - uses: actions/setup-java@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: temurin
+          cache: gradle
 
-      - uses: actions/cache@v4
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-read-only: true  # Read-only since we're not building
 
-      - name: Run dependency vulnerability scan
-        run: ./gradlew dependencyCheckAnalyze --no-daemon || true
+      - name: Run security scan
+        run: |
+          ./gradlew dependencyCheckAnalyze \
+            --build-cache \
+            --configuration-cache \
+            --no-daemon \
+            --parallel || true
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: security-reports
           path: build/reports/
-          retention-days: 7
+          retention-days: 3
+          compression-level: 6
 
   # -----------------------------
-  # 3. Docker Build & Push
+  # 3. Optimized Docker Build
   # -----------------------------
   build-docker:
     runs-on: ubuntu-latest
-    needs: [ build-and-test, security-scan ]
+    needs: build-and-test  # Remove security-scan dependency for faster builds
     if: github.event_name == 'push'
+    timeout-minutes: 10
 
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
       image-tag: ${{ steps.meta.outputs.tags }}
+      image-labels: ${{ steps.meta.outputs.labels }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - uses: actions/download-artifact@v4
+      - name: Download JAR artifacts
+        uses: actions/download-artifact@v4
         with:
           name: jar-artifacts
           path: build/libs/
 
-      - uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            network=host
+          buildkitd-flags: |
+            --allow-insecure-entitlement security.insecure
+            --allow-insecure-entitlement network.host
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -168,7 +215,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - id: meta
+      - name: Extract metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -179,11 +227,9 @@ jobs:
           labels: |
             org.opencontainers.image.title=Social Preview App
             org.opencontainers.image.description=Spring Boot Social Preview Application
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ github.ref_name }}
 
-      - id: build
+      - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -191,60 +237,103 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64  # Single platform for faster builds
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
 
   # -----------------------------
-  # 4. Deploy Staging
+  # 4. Fast Staging Deploy
   # -----------------------------
   deploy-staging:
     runs-on: ubuntu-latest
     needs: build-docker
     if: github.ref == 'refs/heads/develop'
+    timeout-minutes: 5
+    environment: staging
 
     steps:
       - name: Deploy to Staging
         run: |
-          IMAGE_TAG=${{ steps.build-docker.outputs.image-tag }}
+          IMAGE_TAG="${{ needs.build-docker.outputs.image-tag }}"
           echo "🚀 Deploying staging image: $IMAGE_TAG"
-          docker pull $IMAGE_TAG
-          docker stop social-preview-app-staging || true
-          docker rm social-preview-app-staging || true
-          docker run -d --name social-preview-app-staging -p 8081:8080 \
+          FIRST_TAG=$(echo "$IMAGE_TAG" | head -n1)
+          echo "Using tag: $FIRST_TAG"
+          
+          # Pre-pull image in background while stopping old container
+          docker pull "$FIRST_TAG" &
+          PULL_PID=$!
+          
+          # Stop and remove old container
+          docker stop social-preview-app-staging 2>/dev/null || true
+          docker rm social-preview-app-staging 2>/dev/null || true
+          
+          # Wait for pull to complete
+          wait $PULL_PID
+          
+          # Quick deploy with optimized settings
+          docker run -d --name social-preview-app-staging \
+            -p 8081:8080 \
             -e SPRING_PROFILES_ACTIVE=staging \
-            $IMAGE_TAG
+            -e JAVA_OPTS="-Xmx512m -Xms256m -XX:+UseG1GC" \
+            --restart unless-stopped \
+            "$FIRST_TAG"
+          
+          echo "✅ Staging deployment completed"
 
   # -----------------------------
-  # 5. Deploy Production
+  # 5. Fast Production Deploy
   # -----------------------------
   deploy-production:
     runs-on: ubuntu-latest
     needs: build-docker
     if: github.ref == 'refs/heads/main'
+    timeout-minutes: 5
+    environment: production
 
     steps:
       - name: Deploy to Production
         run: |
-          IMAGE_TAG=${{ steps.build-docker.outputs.image-tag }}
+          IMAGE_TAG="${{ needs.build-docker.outputs.image-tag }}"
           echo "🚀 Deploying production image: $IMAGE_TAG"
-          docker pull $IMAGE_TAG
-          docker stop social-preview-app || true
-          docker rm social-preview-app || true
-          docker run -d --name social-preview-app -p 80:8080 \
+          FIRST_TAG=$(echo "$IMAGE_TAG" | head -n1)
+          echo "Using tag: $FIRST_TAG"
+          
+          # Pre-pull image in background while stopping old container
+          docker pull "$FIRST_TAG" &
+          PULL_PID=$!
+          
+          # Stop and remove old container
+          docker stop social-preview-app 2>/dev/null || true
+          docker rm social-preview-app 2>/dev/null || true
+          
+          # Wait for pull to complete
+          wait $PULL_PID
+          
+          # Production deploy with optimized settings
+          docker run -d --name social-preview-app \
+            -p 80:8080 \
             -e SPRING_PROFILES_ACTIVE=production \
-            $IMAGE_TAG
+            -e JAVA_OPTS="-Xmx1g -Xms512m -XX:+UseG1GC -XX:+UseStringDeduplication" \
+            --restart unless-stopped \
+            "$FIRST_TAG"
+          
+          echo "✅ Production deployment completed"
 
   # -----------------------------
-  # 6. Cleanup
+  # 6. Lightweight Cleanup
   # -----------------------------
   cleanup:
     runs-on: ubuntu-latest
-    needs: [ build-and-test, security-scan, build-docker, deploy-staging, deploy-production ]
+    needs: [ build-and-test, build-docker ]
     if: always()
+    timeout-minutes: 2
 
     steps:
-      - name: Cleanup artifacts
+      - name: Cleanup workspace
         run: |
           echo "🧹 Cleaning up..."
-          rm -rf build/ || true
+          # Clean up Docker build cache older than 7 days
+          docker system prune -af --filter "until=168h" 2>/dev/null || true
+          echo "✅ Cleanup completed"
