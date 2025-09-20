@@ -9,7 +9,7 @@ services:
       MYSQL_DATABASE: social-preview
       MYSQL_ROOT_HOST: '%'
     ports:
-      - "3307:3306"  # Different port to avoid conflicts
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
