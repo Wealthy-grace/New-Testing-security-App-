@@ -60,6 +60,7 @@ jobs:
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
           cache-read-only: false
+          gradle-home-cache-cleanup: true
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
@@ -227,6 +228,9 @@ jobs:
           labels: |
             org.opencontainers.image.title=Social Preview App
             org.opencontainers.image.description=Spring Boot Social Preview Application
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
 
       - name: Build and push Docker image
         id: build
@@ -242,6 +246,12 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             BUILDKIT_INLINE_CACHE=1
+
+      - name: Output image details
+        run: |
+          echo "✅ Docker image built successfully!"
+          echo "Image digest: ${{ steps.build.outputs.digest }}"
+          echo "Image tags: ${{ steps.meta.outputs.tags }}"
 
   # -----------------------------
   # 4. Fast Staging Deploy
@@ -278,9 +288,25 @@ jobs:
             -e SPRING_PROFILES_ACTIVE=staging \
             -e JAVA_OPTS="-Xmx512m -Xms256m -XX:+UseG1GC" \
             --restart unless-stopped \
+            --health-cmd="curl -f http://localhost:8080/actuator/health || exit 1" \
+            --health-interval=30s \
+            --health-timeout=3s \
+            --health-retries=3 \
             "$FIRST_TAG"
           
           echo "✅ Staging deployment completed"
+
+      - name: Verify staging deployment
+        run: |
+          echo "🔍 Verifying staging deployment..."
+          sleep 10
+          if curl -f http://localhost:8081/actuator/health; then
+            echo "✅ Staging health check passed"
+          else
+            echo "❌ Staging health check failed"
+            docker logs social-preview-app-staging --tail 50
+            exit 1
+          fi
 
   # -----------------------------
   # 5. Fast Production Deploy
@@ -304,7 +330,7 @@ jobs:
           docker pull "$FIRST_TAG" &
           PULL_PID=$!
           
-          # Stop and remove old container
+          # Stop and remove old container gracefully
           docker stop social-preview-app 2>/dev/null || true
           docker rm social-preview-app 2>/dev/null || true
           
@@ -317,27 +343,77 @@ jobs:
             -e SPRING_PROFILES_ACTIVE=production \
             -e JAVA_OPTS="-Xmx1g -Xms512m -XX:+UseG1GC -XX:+UseStringDeduplication" \
             --restart unless-stopped \
+            --health-cmd="curl -f http://localhost:8080/actuator/health || exit 1" \
+            --health-interval=30s \
+            --health-timeout=5s \
+            --health-retries=3 \
+            --memory=1.5g \
+            --cpus=2 \
             "$FIRST_TAG"
           
           echo "✅ Production deployment completed"
 
+      - name: Verify production deployment
+        run: |
+          echo "🔍 Verifying production deployment..."
+          sleep 15
+          if curl -f http://localhost/actuator/health; then
+            echo "✅ Production health check passed"
+          else
+            echo "❌ Production health check failed"
+            docker logs social-preview-app --tail 50
+            exit 1
+          fi
+
   # -----------------------------
-  # 6. Lightweight Cleanup
+  # 6. Comprehensive Cleanup
   # -----------------------------
   cleanup:
     runs-on: ubuntu-latest
-    needs: [ build-and-test, build-docker ]
+    needs: [ build-and-test, build-docker, deploy-staging, deploy-production ]
     if: always()
     timeout-minutes: 2
 
     steps:
-      - name: Cleanup workspace
+      - name: Cleanup workspace and Docker
         run: |
-          echo "🧹 Cleaning up..."
+          echo "🧹 Starting cleanup..."
+          
           # Clean up Docker build cache older than 7 days
           docker system prune -af --filter "until=168h" 2>/dev/null || true
-<<<<<<< HEAD
+          
+          # Clean up dangling Docker images
+          docker image prune -f 2>/dev/null || true
+          
+          # Clean up unused volumes
+          docker volume prune -f 2>/dev/null || true
+          
+          # Clean up workspace
+          rm -rf build/ || true
+          rm -rf ~/.gradle/caches/build-cache-* 2>/dev/null || true
+          
           echo "✅ Cleanup completed"
-=======
-          echo "✅ Cleanup completed"
->>>>>>> 9e01f5692a2fce0eb76dbb0de8cae61551bdadc2
+
+  # -----------------------------
+  # 7. Notification (Optional)
+  # -----------------------------
+  notify:
+    runs-on: ubuntu-latest
+    needs: [ deploy-staging, deploy-production, cleanup ]
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+    timeout-minutes: 1
+
+    steps:
+      - name: Send deployment notification
+        run: |
+          if [[ "${{ needs.deploy-production.result }}" == "success" ]]; then
+            echo "🎉 Production deployment successful!"
+            echo "Branch: ${{ github.ref_name }}"
+            echo "Commit: ${{ github.sha }}"
+            echo "Image: ${{ needs.build-docker.outputs.image-tag }}"
+          elif [[ "${{ needs.deploy-staging.result }}" == "success" ]]; then
+            echo "🚀 Staging deployment successful!"
+            echo "Branch: ${{ github.ref_name }}"
+            echo "Commit: ${{ github.sha }}"
+            echo "Image: ${{ needs.build-docker.outputs.image-tag }}"
+          fi
