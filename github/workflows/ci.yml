@@ -259,19 +259,19 @@ jobs:
   deploy-staging:
     runs-on: ubuntu-latest
     needs: build-docker
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 8
     environment: staging
 
     services:
-      mysql:
+      mysql-staging:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: Server123@
           MYSQL_DATABASE: social_preview_staging
           MYSQL_ROOT_HOST: '%'
         ports:
-          - 3306:3306
+          - 3307:3306  # Different port to avoid conflict with production
         options: >-
           --health-cmd="mysqladmin ping -h localhost -u root -pServer123@"
           --health-interval=10s
@@ -283,9 +283,9 @@ jobs:
       - name: Setup Staging Database
         run: |
           echo "🗄️ Setting up staging database..."
-          # Wait for MySQL to be ready
+          # Wait for MySQL to be ready (use staging port 3307)
           for i in {1..30}; do
-            if mysqladmin ping -h 127.0.0.1 -P 3306 -u root -pServer123@ --silent; then
+            if mysqladmin ping -h 127.0.0.1 -P 3307 -u root -pServer123@ --silent; then
               echo "✅ MySQL is ready!"
               break
             fi
@@ -294,7 +294,7 @@ jobs:
           done
           
           # Create staging database if it doesn't exist
-          mysql -h 127.0.0.1 -P 3306 -u root -pServer123@ \
+          mysql -h 127.0.0.1 -P 3307 -u root -pServer123@ \
             -e "CREATE DATABASE IF NOT EXISTS social_preview_staging;"
           
           echo "✅ Staging database ready"
@@ -322,7 +322,7 @@ jobs:
             -p 8081:8081 \
             -e SPRING_PROFILES_ACTIVE=staging \
             -e SERVER_PORT=8081 \
-            -e SPRING_DATASOURCE_URL="jdbc:mysql://host.docker.internal:3306/social_preview_staging" \
+            -e SPRING_DATASOURCE_URL="jdbc:mysql://host.docker.internal:3307/social_preview_staging" \
             -e SPRING_DATASOURCE_USERNAME=root \
             -e SPRING_DATASOURCE_PASSWORD=Server123@ \
             -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
@@ -402,19 +402,19 @@ jobs:
   deploy-production:
     runs-on: ubuntu-latest
     needs: build-docker
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 10
     environment: production
 
     services:
-      mysql:
+      mysql-production:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: Server123@
           MYSQL_DATABASE: social_preview_prod
           MYSQL_ROOT_HOST: '%'
         ports:
-          - 3306:3306
+          - 3306:3306  # Keep production on default port
         options: >-
           --health-cmd="mysqladmin ping -h localhost -u root -pServer123@"
           --health-interval=10s
