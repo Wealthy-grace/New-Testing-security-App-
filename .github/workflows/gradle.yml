@@ -336,4 +336,8 @@ jobs:
           echo "🧹 Cleaning up..."
           # Clean up Docker build cache older than 7 days
           docker system prune -af --filter "until=168h" 2>/dev/null || true
+<<<<<<< HEAD
           echo "✅ Cleanup completed"
+=======
+          echo "✅ Cleanup completed"
+>>>>>>> 9e01f5692a2fce0eb76dbb0de8cae61551bdadc2
