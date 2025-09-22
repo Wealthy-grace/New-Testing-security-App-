@@ -1,21 +1,9 @@
-name: CI/CD Pipeline for Social Preview App
 
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  packages: write
-  actions: read
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: wealthy-grace/social-preview-app
-  JAVA_VERSION: 17
+  IMAGE_NAME: 
+  : 17
   GRADLE_VERSION: 8.5
 
 jobs:
